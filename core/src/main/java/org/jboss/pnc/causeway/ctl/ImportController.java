@@ -10,7 +10,15 @@ import org.jboss.pnc.causeway.rest.model.TaggedBuild;
  */
 public interface ImportController {
 
-    public void importBuild(Build build, CallbackTarget callback, String username);
+    /**
+     * Using the default importMetadataOnly=false
+     *
+     * @deprecated use with extra parameter importMetadataOnly
+     */
+    @Deprecated
+    void importBuild(Build build, CallbackTarget callback, String username);
 
-    public void untagBuild(TaggedBuild build, CallbackTarget callback);
+    void importBuild(Build build, CallbackTarget callback, String username, boolean importMetadataOnly);
+
+    void untagBuild(TaggedBuild build, CallbackTarget callback);
 }

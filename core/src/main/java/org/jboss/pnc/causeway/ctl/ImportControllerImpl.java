@@ -1,20 +1,23 @@
 package org.jboss.pnc.causeway.ctl;
 
+import com.redhat.red.build.koji.model.json.KojiImport;
+import lombok.Data;
 import org.jboss.pnc.causeway.CausewayException;
 import org.jboss.pnc.causeway.CausewayFailure;
 import org.jboss.pnc.causeway.brewclient.BrewClient;
 import org.jboss.pnc.causeway.brewclient.BuildTranslator;
 import org.jboss.pnc.causeway.brewclient.ImportFileGenerator;
 import org.jboss.pnc.causeway.config.CausewayConfig;
-import static org.jboss.pnc.causeway.ctl.PncImportControllerImpl.messageMissingTag;
 import org.jboss.pnc.causeway.rest.BrewBuild;
 import org.jboss.pnc.causeway.rest.BrewNVR;
 import org.jboss.pnc.causeway.rest.CallbackTarget;
 import org.jboss.pnc.causeway.rest.model.Build;
 import org.jboss.pnc.causeway.rest.model.TaggedBuild;
-import org.jboss.pnc.causeway.rest.model.UntagRequest;
 import org.jboss.pnc.causeway.rest.model.response.BuildRecordPushResultRest;
 import org.jboss.pnc.causeway.rest.model.response.BuildRecordPushResultRest.BuildRecordPushResultRestBuilder;
+import org.jboss.pnc.causeway.rest.model.response.OperationStatus;
+import org.jboss.pnc.causeway.rest.model.response.UntagResultRest;
+import org.jboss.pnc.causeway.rest.model.response.UntagResultRest.UntagResultRestBuilder;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
@@ -28,19 +31,10 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.Invocation;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.redhat.red.build.koji.model.json.KojiImport;
-
-import lombok.Data;
-
-import org.jboss.pnc.causeway.rest.model.response.OperationStatus;
-import org.jboss.pnc.causeway.rest.model.response.UntagResultRest;
-import org.jboss.pnc.causeway.rest.model.response.UntagResultRest.UntagResultRestBuilder;
-
-import com.redhat.red.build.koji.model.xmlrpc.messages.UntagBuildRequest;
+import static org.jboss.pnc.causeway.ctl.PncImportControllerImpl.messageMissingTag;
 
 /**
  *
@@ -65,15 +59,22 @@ public class ImportControllerImpl implements ImportController {
         restClient = new ResteasyClientBuilder().connectionPoolSize(4).build();
     }
 
+    @Deprecated
     @Override
     @Asynchronous
     public void importBuild(Build build, CallbackTarget callback, String username) {
+        importBuild(build, callback, username, false);
+    }
+
+    @Override
+    @Asynchronous
+    public void importBuild(Build build, CallbackTarget callback, String username, boolean importMetadataOnly) {
         logger.log(Level.INFO, "Entering importBuild.");
 
         BuildRecordPushResultRestBuilder response = BuildRecordPushResultRest.builder();
         response.buildRecordId(build.getExternalBuildID());
         try {
-            BuildResult result = importBuild(build, build.getTagPrefix(), username);
+            BuildResult result = importBuild(build, build.getTagPrefix(), username, importMetadataOnly);
             response.brewBuildId(result.getBrewID());
             response.brewBuildUrl(result.getBrewURL());
             response.status(OperationStatus.SUCCESS);
@@ -118,7 +119,7 @@ public class ImportControllerImpl implements ImportController {
         respond(callback, response.build());
     }
 
-    private BuildResult importBuild(Build build, String tagPrefix, String username) throws CausewayException {
+    private BuildResult importBuild(Build build, String tagPrefix, String username, boolean importMetadataOnly) throws CausewayException {
         if (build.getBuiltArtifacts().isEmpty()) {
             throw new CausewayFailure("Build doesn't contain any artifacts");
         }
@@ -132,7 +133,13 @@ public class ImportControllerImpl implements ImportController {
         String message;
         if (brewBuild == null) {
             KojiImport kojiImport = translator.translate(nvr, build, username);
-            ImportFileGenerator importFiles = translator.getImportFiles(build);
+
+            ImportFileGenerator importFiles;
+            if (importMetadataOnly) {
+                importFiles = ImportFileGenerator.empty();
+            } else {
+                importFiles = translator.getImportFiles(build);
+            }
 
             brewBuild = brewClient.importBuild(nvr, kojiImport, importFiles);
             message = "Build imported with id ";

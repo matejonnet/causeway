@@ -40,8 +40,8 @@ public class ImportEndpoint implements Import {
     }
 
     @Override
-    public Response importBuild(BuildImportRequest request) {
-        controller.importBuild(request.getBuild(), request.getCallback(), userSerivce.getUsername());
+    public Response importBuild(BuildImportRequest request, boolean importMetadataOnly) {
+        controller.importBuild(request.getBuild(), request.getCallback(), userSerivce.getUsername(), importMetadataOnly);
         return Response.accepted().build();
     }
 

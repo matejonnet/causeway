@@ -15,18 +15,19 @@
  */
 package org.jboss.pnc.causeway.ctl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.redhat.red.build.koji.model.json.KojiImport;
+import com.redhat.red.build.koji.model.json.util.KojiObjectMapper;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
-
-import com.redhat.red.build.koji.model.json.KojiImport;
-
 import org.jboss.pnc.causeway.CausewayException;
 import org.jboss.pnc.causeway.CausewayFailure;
 import org.jboss.pnc.causeway.brewclient.BrewClient;
 import org.jboss.pnc.causeway.brewclient.BuildTranslatorImpl;
 import org.jboss.pnc.causeway.brewclient.ExternalLogImportFileGenerator;
 import org.jboss.pnc.causeway.config.CausewayConfig;
-import static org.jboss.pnc.causeway.ctl.PncImportControllerImpl.messageMissingTag;
 import org.jboss.pnc.causeway.rest.BrewBuild;
 import org.jboss.pnc.causeway.rest.BrewNVR;
 import org.jboss.pnc.causeway.rest.CallbackMethod;
@@ -35,29 +36,35 @@ import org.jboss.pnc.causeway.rest.model.Build;
 import org.jboss.pnc.causeway.rest.model.MavenBuild;
 import org.jboss.pnc.causeway.rest.model.MavenBuiltArtifact;
 import org.jboss.pnc.causeway.rest.model.response.ArtifactImportError;
-import org.junit.*;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.util.*;
-
-import static org.mockito.Mockito.*;
-import org.mockito.InjectMocks;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tomakehurst.wiremock.client.WireMock;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import com.redhat.red.build.koji.model.json.util.KojiObjectMapper;
+import static org.jboss.pnc.causeway.ctl.PncImportControllerImpl.messageMissingTag;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.same;
+import static org.mockito.Mockito.when;
 
 public class ImportControllerTest {
 
@@ -146,7 +153,24 @@ public class ImportControllerTest {
         doReturn(brewBuild).when(brewClient).importBuild(eq(NVR), same(KOJI_IMPORT), same(IMPORT_FILE_GENERATOR));
 
         // Run import
-        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME);
+        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME, false);
+
+        // Verify
+        verifySuccess("Build imported with id 11");
+    }
+
+    @Test
+    public void testImportBuildMetadataOnly() throws Exception {
+        // Test setup
+        mockBrew();
+        mockTranslator();
+
+        // Mock Brew import
+        BrewBuild brewBuild = new BrewBuild(11, NVR);
+        doReturn(brewBuild).when(brewClient).importBuild(eq(NVR), same(KOJI_IMPORT), same(IMPORT_FILE_GENERATOR));
+
+        // Run import
+        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME, false);
 
         // Verify
         verifySuccess("Build imported with id 11");
@@ -162,7 +186,7 @@ public class ImportControllerTest {
         build.getBuiltArtifacts().clear();
 
         // Run import
-        importController.importBuild(build, CALLBACK_TARGET, USERNAME);
+        importController.importBuild(build, CALLBACK_TARGET, USERNAME, false);
 
         // Verify
         verifyFailure("Build doesn't contain any artifacts");
@@ -179,7 +203,7 @@ public class ImportControllerTest {
         doThrow(new CausewayException(exceptionMessage)).when(brewClient).findBrewBuildOfNVR(eq(NVR));
 
         // Run import
-        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME);
+        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME, false);
 
         // Verify
         verifyError(exceptionMessage);
@@ -203,7 +227,7 @@ public class ImportControllerTest {
         doThrow(new CausewayFailure(artifactImportErrors, exceptionMessage)).when(brewClient).importBuild(eq(NVR), same(KOJI_IMPORT), same(IMPORT_FILE_GENERATOR));
 
         // Run import
-        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME);
+        importController.importBuild(getBuild(), CALLBACK_TARGET, USERNAME, false);
 
         // Verify
         verifyFailure(exceptionMessage, artifactImportErrors);

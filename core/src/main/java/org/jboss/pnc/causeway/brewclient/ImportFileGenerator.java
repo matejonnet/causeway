@@ -15,11 +15,15 @@
  */
 package org.jboss.pnc.causeway.brewclient;
 
+import com.redhat.red.build.koji.model.ImportFile;
+import lombok.Data;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -28,10 +32,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import com.redhat.red.build.koji.model.ImportFile;
-
-import lombok.Data;
 
 /**
  *
@@ -160,6 +160,15 @@ public abstract class ImportFileGenerator implements Iterable<Supplier<ImportFil
                 throw new RuntimeException(ex);
             }
         }
+    }
+
+    public static ImportFileGenerator empty() {
+        return new ImportFileGenerator() {
+            @Override
+            public Iterator<Supplier<ImportFile>> iterator() {
+                return Collections.emptyIterator();
+            }
+        };
     }
 
 }
