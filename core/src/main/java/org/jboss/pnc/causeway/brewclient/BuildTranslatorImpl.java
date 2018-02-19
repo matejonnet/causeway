@@ -15,16 +15,16 @@
  */
 package org.jboss.pnc.causeway.brewclient;
 
-import org.commonjava.maven.atlas.ident.ref.ProjectVersionRef;
-
 import com.redhat.red.build.koji.model.json.BuildContainer;
+import com.redhat.red.build.koji.model.json.BuildDescription;
 import com.redhat.red.build.koji.model.json.BuildOutput;
 import com.redhat.red.build.koji.model.json.BuildRoot;
 import com.redhat.red.build.koji.model.json.FileBuildComponent;
 import com.redhat.red.build.koji.model.json.KojiImport;
 import com.redhat.red.build.koji.model.json.StandardArchitecture;
+import com.redhat.red.build.koji.model.json.StandardOutputType;
 import com.redhat.red.build.koji.model.json.VerificationException;
-
+import org.commonjava.maven.atlas.ident.ref.ProjectVersionRef;
 import org.commonjava.maven.atlas.ident.ref.SimpleArtifactRef;
 import org.commonjava.maven.atlas.ident.ref.SimpleProjectVersionRef;
 import org.jboss.pnc.causeway.CausewayException;
@@ -39,10 +39,11 @@ import org.jboss.pnc.causeway.rest.model.Dependency;
 import org.jboss.pnc.causeway.rest.model.Logfile;
 import org.jboss.pnc.causeway.rest.model.MavenBuild;
 import org.jboss.pnc.causeway.rest.model.MavenBuiltArtifact;
+import org.jboss.pnc.causeway.rest.model.NpmBuild;
+import org.jboss.pnc.causeway.rest.model.NpmBuiltArtifact;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-
 import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.security.MessageDigest;
@@ -51,9 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.redhat.red.build.koji.model.json.BuildDescription;
-import com.redhat.red.build.koji.model.json.StandardOutputType;
-
 /**
  *
  * @author Honza Brázdil &lt;jbrazdil@redhat.com&gt;
@@ -61,6 +59,7 @@ import com.redhat.red.build.koji.model.json.StandardOutputType;
 @ApplicationScoped
 public class BuildTranslatorImpl implements BuildTranslator {
     private static final String MAVEN = "maven";
+    private static final String NPM = "npm";
     private static final String CONTENT_GENERATOR_NAME = "Project Newcastle";
     static final String PNC = "PNC";
 
@@ -219,6 +218,13 @@ public class BuildTranslatorImpl implements BuildTranslator {
                     outputBuilder.withMavenInfoAndType(ref);
                     break;
                 }
+                case NPM: {
+                    SimpleArtifactRef ref = SimpleArtifactRef.parse(artifact.identifier); //TODO make sure parser is NPM friendly
+                    outputBuilder.withFileSize((int) artifact.size);
+                    //TODO
+                    outputBuilder.withNpmInfoAndType(ref);
+                    break;
+                }
                 default: {
                     throw new IllegalArgumentException("Unknown artifact type.");
                 }
@@ -237,6 +243,9 @@ public class BuildTranslatorImpl implements BuildTranslator {
 
             if (artifact.getClass().equals(MavenBuiltArtifact.class)) {
                 outputBuilder.withMavenInfoAndType(mavenArtifactToGAV((MavenBuiltArtifact) artifact));
+            } else if (artifact.getClass().equals(NpmBuiltArtifact.class)) {
+                //TODO
+                outputBuilder.withNpmInfoAndType(npmArtifactToGAV((NpmBuiltArtifact) artifact));
             } else {
                 throw new IllegalArgumentException("Unknown artifact type.");
             }
@@ -324,6 +333,8 @@ public class BuildTranslatorImpl implements BuildTranslator {
     private void setBuildType(BuildDescription.Builder buildDescription, Build build) {
         if (build.getClass().equals(MavenBuild.class)) {
             buildDescription.withMavenInfoAndType(mavenBuildToGAV((MavenBuild) build));
+        } else if (build.getClass().equals(NpmBuild.class)) {
+            buildDescription.withMavenInfoAndType(npmBuildToGAV((NpmBuild) build));
         } else {
             throw new IllegalArgumentException("Unsupported build type.");
         }
@@ -333,7 +344,17 @@ public class BuildTranslatorImpl implements BuildTranslator {
         return new SimpleProjectVersionRef(mb.getGroupId(), mb.getArtifactId(), mb.getVersion());
     }
 
+    private ProjectVersionRef npmBuildToGAV(NpmBuild npmBuild) {
+        //TODO NPM version
+        return new SimpleProjectVersionRef(npmBuild.getName(), npmBuild.getVersion());
+    }
+
     private ProjectVersionRef mavenArtifactToGAV(MavenBuiltArtifact mba) {
         return new SimpleProjectVersionRef(mba.getGroupId(), mba.getArtifactId(), mba.getVersion());
+    }
+
+    private ProjectVersionRef npmArtifactToGAV(NpmBuiltArtifact npmBuiltArtifact) {
+        //TODO NPM version
+        return new SimpleProjectVersionRef(npmBuiltArtifact.getName(), npmBuiltArtifact.getVersion());
     }
 }
